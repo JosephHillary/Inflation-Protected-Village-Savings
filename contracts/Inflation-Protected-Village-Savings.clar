@@ -6,6 +6,7 @@
 (define-constant err-already-member u104)
 (define-constant err-invalid-amount u105)
 (define-constant err-group-inactive u106)
+(define-constant err-lock-period-not-met u107)
 
 (define-data-var next-group-id uint u1)
 (define-data-var inflation-rate uint u300)
@@ -22,7 +23,8 @@
 (define-map group-members {group-id: uint, member: principal} {
     balance: uint,
     deposit-time: uint,
-    active: bool
+    active: bool,
+    min-lock-period: uint
 })
 
 (define-private (calculate-inflation-adjustment (principal-amount uint) (time-elapsed uint))
@@ -52,7 +54,8 @@
                 (map-set group-members {group-id: group-id, member: tx-sender} {
                     balance: u0,
                     deposit-time: stacks-block-height,
-                    active: true
+                    active: true,
+                    min-lock-period: u0
                 })
                 (map-set savings-groups group-id
                     (merge group-data {member-count: (+ (get member-count group-data) u1)}))
@@ -100,17 +103,19 @@
                         (let ((time-elapsed (- stacks-block-height (get deposit-time member-data)))
                               (current-balance (get balance member-data))
                               (adjusted-balance (calculate-inflation-adjustment current-balance time-elapsed)))
-                            (if (<= amount adjusted-balance)
-                                (begin
-                                    (try! (as-contract (stx-transfer? amount tx-sender tx-sender)))
-                                    (let ((remaining-balance (- current-balance amount)))
-                                        (map-set group-members member-key
-                                            (merge member-data {balance: remaining-balance}))
-                                        (map-set savings-groups group-id
-                                            (merge group-data {total-balance: (- (get total-balance group-data) amount)}))
-                                        (print {event: "withdrawal", group-id: group-id, member: tx-sender, amount: amount})
-                                        (ok remaining-balance)))
-                                (err err-insufficient-balance)))
+                            (if (>= time-elapsed (get min-lock-period member-data))
+                                (if (<= amount adjusted-balance)
+                                    (begin
+                                        (try! (as-contract (stx-transfer? amount tx-sender tx-sender)))
+                                        (let ((remaining-balance (- current-balance amount)))
+                                            (map-set group-members member-key
+                                                (merge member-data {balance: remaining-balance}))
+                                            (map-set savings-groups group-id
+                                                (merge group-data {total-balance: (- (get total-balance group-data) amount)}))
+                                            (print {event: "withdrawal", group-id: group-id, member: tx-sender, amount: amount})
+                                            (ok remaining-balance)))
+                                    (err err-insufficient-balance))
+                                (err err-lock-period-not-met)))
                         (err err-not-member)))
                 (if (get active group-data)
                     (err err-not-member)
@@ -142,6 +147,19 @@
                         true)
                     (print {event: "member-left", group-id: group-id, member: tx-sender, final-balance: final-balance})
                     (ok final-balance))
+                (err err-not-member))
+            (err err-not-member))))
+
+(define-public (set-min-lock-period (group-id uint) (period uint))
+    (let ((member-key {group-id: group-id, member: tx-sender}))
+        (match (map-get? group-members member-key)
+            member-data
+            (if (get active member-data)
+                (begin
+                    (map-set group-members member-key
+                        (merge member-data {min-lock-period: period}))
+                    (print {event: "lock-period-set", group-id: group-id, member: tx-sender, period: period})
+                    (ok period))
                 (err err-not-member))
             (err err-not-member))))
 
