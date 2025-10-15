@@ -12,6 +12,7 @@ Traditional rural savings groups lose value due to high inflation rates. This sm
 - 📈 **Inflation Protection**: Real-time balance adjustments based on configured inflation rates
 - 💸 **Protected Withdrawals**: Withdraw inflation-adjusted amounts
 - 📊 **Transparent Records**: All transactions logged and verifiable on-chain
+- 🎯 **Savings Goals**: Members can set personal savings targets and track progress
 - ⚙️ **Configurable Inflation**: Admin can update inflation rates as economic conditions change
 
 ## 🚀 Quick Start
@@ -54,7 +55,12 @@ clarinet check
 (contract-call? .Inflation-Protected-Village-Savings withdraw u1 u500000)
 ```
 
-### 6. Leave Group (get full inflation-adjusted balance)
+### 6. Set Savings Goal
+```clarity
+(contract-call? .Inflation-Protected-Village-Savings set-savings-goal u1 u5000000)
+```
+
+### 7. Leave Group (get full inflation-adjusted balance)
 ```clarity
 (contract-call? .Inflation-Protected-Village-Savings leave-group u1)
 ```
@@ -83,6 +89,7 @@ clarinet check
 ```clarity
 (contract-call? .Inflation-Protected-Village-Savings get-member-info u1 'SP1...)
 (contract-call? .Inflation-Protected-Village-Savings get-member-adjusted-balance u1 'SP1...)
+(contract-call? .Inflation-Protected-Village-Savings get-savings-goal-progress u1 'SP1...)
 ```
 
 ### Inflation Calculations

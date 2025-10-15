@@ -24,7 +24,8 @@
     balance: uint,
     deposit-time: uint,
     active: bool,
-    min-lock-period: uint
+    min-lock-period: uint,
+    savings-goal: uint
 })
 
 (define-private (calculate-inflation-adjustment (principal-amount uint) (time-elapsed uint))
@@ -55,7 +56,8 @@
                     balance: u0,
                     deposit-time: stacks-block-height,
                     active: true,
-                    min-lock-period: u0
+                    min-lock-period: u0,
+                    savings-goal: u0
                 })
                 (map-set savings-groups group-id
                     (merge group-data {member-count: (+ (get member-count group-data) u1)}))
@@ -222,4 +224,29 @@
         (let ((time-elapsed (- stacks-block-height (get deposit-time member-data)))
               (current-balance (get balance member-data)))
             (calculate-inflation-adjustment current-balance time-elapsed))
+        u0))
+
+(define-public (set-savings-goal (group-id uint) (goal uint))
+    (let ((member-key {group-id: group-id, member: tx-sender}))
+        (match (map-get? group-members member-key)
+            member-data
+            (if (get active member-data)
+                (begin
+                    (map-set group-members member-key
+                        (merge member-data {savings-goal: goal}))
+                    (print {event: "savings-goal-set", group-id: group-id, member: tx-sender, goal: goal})
+                    (ok goal))
+                (err err-not-member))
+            (err err-not-member))))
+
+(define-read-only (get-savings-goal-progress (group-id uint) (member principal))
+    (match (map-get? group-members {group-id: group-id, member: member})
+        member-data
+        (let ((time-elapsed (- stacks-block-height (get deposit-time member-data)))
+              (current-balance (get balance member-data))
+              (adjusted-balance (calculate-inflation-adjustment current-balance time-elapsed))
+              (goal (get savings-goal member-data)))
+            (if (> goal u0)
+                (/ (* adjusted-balance u100) goal)
+                u0))
         u0))
